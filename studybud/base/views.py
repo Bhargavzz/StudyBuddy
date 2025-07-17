@@ -223,11 +223,8 @@ def updateUser(request):
     form = UserForm(instance=user)
     
     if request.method == 'POST':
-        print("POST received")
-        print("FILES:", request.FILES)
         form = UserForm(request.POST, request.FILES, instance=user)
         if form.is_valid():
-            print("Form is valid")
             avatar_file = request.FILES.get('avatar')
             if avatar_file:
                 file_name = f"{user.username}_{avatar_file.name}"
@@ -237,8 +234,6 @@ def updateUser(request):
             else:
                 form.save()
             return redirect('user-profile', pk=user.id)
-        else:
-            print("Form errors:", form.errors)
     context = {'form': form}
     return render(request, 'base/update-user.html', context)
 
