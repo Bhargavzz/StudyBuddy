@@ -3,8 +3,16 @@
 {% block content %}
   <main class="profile-page layout layout--3">
     <div class="container">
+
+      {# Display global messages if any #}
+      {% if messages %}
+        {% for message in messages %}
+          <div class="form__error">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+
       <!-- Topics Start -->
-      {%include 'base/topics_component.html'%}
+      {% include 'base/topics_component.html' %}
       <!-- Topics End -->
 
       <!-- Room List Start -->
@@ -12,28 +20,25 @@
         <div class="profile">
           <div class="profile__avatar">
             <div class="avatar avatar--large active">
-              <img src="{{user.avatar.url}}" />
+              <img src="{{ user.avatar|default:'https://avatar.iran.liara.run/public/17' }}" onerror="this.onerror=null;this.src='https://avatar.iran.liara.run/public/17';" />
             </div>
           </div>
           <div class="profile__info">
-            <h3>{{user.name}}</h3>
-            <p>@{{user.username}}</p>
+            <h3>{{ user.name }}</h3>
+            <p>@{{ user.username }}</p>
             {% if request.user == user %}
-            <a href="{% url 'update-user'%}" class="btn btn--main btn--pill">Edit Profile</a>
-          {% endif %}
-        </div>
+              <a href="{% url 'update-user' %}" class="btn btn--main btn--pill">Edit Profile</a>
+            {% endif %}
+          </div>
           <div class="profile__about">
             <h3>About</h3>
-            <p>
-             {{user.bio}}
-            </p>
+            <p>{{ user.bio }}</p>
           </div>
         </div>
 
         <div class="roomList__header">
           <div>
-            <h2>Study Rooms Hosted by {{user.name}}</a>
-            </h2>
+            <h2>Study Rooms Hosted by {{ user.name }}</h2>
           </div>
         </div>
         {% include 'base/feed_component.html' %}
@@ -43,9 +48,7 @@
       <!-- Activities Start -->
       {% include 'base/activity_component.html' %}
       <!-- Activities End -->
+
     </div>
   </main>
-
-
-
 {% endblock %}

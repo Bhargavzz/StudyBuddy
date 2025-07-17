@@ -1163,3 +1163,17 @@ a {
   color: var(--color-main);
   font-weight: 1.4rem;
 }
+
+
+
+
+
+
+.form__error {
+  color: #ff6b6b;
+  background-color: #2a1b1b;
+  padding: 8px 12px;
+  border-radius: 5px;
+  font-size: 0.95rem;
+  margin-top: 8px;
+}

@@ -1,3 +1,4 @@
+from django import forms
 from django.forms import ModelForm
 from .models import Room,User
 from django.contrib.auth.forms import UserCreationForm
@@ -19,6 +20,7 @@ class RoomForm(ModelForm):
         
         
 class UserForm(ModelForm):
+    avatar = forms.CharField(required=False, widget=forms.HiddenInput())
     class Meta:
         model = User
         fields = ['avatar','name','username','email','bio']

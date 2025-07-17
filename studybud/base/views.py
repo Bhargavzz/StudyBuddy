@@ -1,12 +1,14 @@
 from django.shortcuts import render,redirect
 from django.contrib import messages
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from .models import Room,Topic,Message,User
-
+from django.conf import settings
 from django.contrib.auth import authenticate,login,logout
 from.forms import RoomForm,UserForm,MyUserCreationForm
+from supabase import create_client
+import os
 # Create your views here.
 
 # rooms = [
@@ -14,6 +16,22 @@ from.forms import RoomForm,UserForm,MyUserCreationForm
 #     {'id': 2, 'name':'Design with me'},
 #     {'id': 3, 'name':'GoLang Developers'},
 # ]
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+def upload_to_supabase(file_obj, file_name):
+    bucket = "avatars"
+    # Try to delete the file first (ignore error if it doesn't exist)
+    supabase.storage.from_(bucket).remove([file_name])
+    file_bytes = file_obj.read()
+    res = supabase.storage.from_(bucket).upload(file_name, file_bytes)
+    # Check for status_code or raise_for_status
+    if hasattr(res, "status_code") and not (200 <= res.status_code < 300):
+        raise Exception(f"Upload failed: {getattr(res, 'data', res)}")
+    url = supabase.storage.from_(bucket).get_public_url(file_name)
+    return url
+
 def loginPage(request):
     page = 'login'
     if request.user.is_authenticated:
@@ -95,14 +113,20 @@ def room(request,pk):
             Message.objects.create(
                 user=request.user,
                 room=room,
-                body=body
+                body=body,
+                username=request.user.username,
+                avatar_url=request.user.avatar if request.user.avatar else 'https://avatar.iran.liara.run/public/17'
             )
         room.participants.add(request.user)
         return redirect('room',pk=room.id)
     
     
-    context ={'room': room, 'room_messages':room_messages,
-              'participants':participants}
+    context ={'room': room,
+              'room_messages':room_messages,
+              'participants':participants,
+              'SUPABASE_URL': settings.SUPABASE_URL,
+              'SUPABASE_ANON_KEY': settings.SUPABASE_ANON_KEY
+        }
     return render(request,'base/room.html',context)
 
 
@@ -199,12 +223,24 @@ def updateUser(request):
     form = UserForm(instance=user)
     
     if request.method == 'POST':
-        form = UserForm(request.POST,request.FILES,instance=user)
+        print("POST received")
+        print("FILES:", request.FILES)
+        form = UserForm(request.POST, request.FILES, instance=user)
         if form.is_valid():
-            form.save()
-            return redirect('user-profile',pk=user.id)
+            print("Form is valid")
+            avatar_file = request.FILES.get('avatar')
+            if avatar_file:
+                file_name = f"{user.username}_{avatar_file.name}"
+                avatar_url = upload_to_supabase(avatar_file, file_name)
+                user.avatar = avatar_url
+                user.save()
+            else:
+                form.save()
+            return redirect('user-profile', pk=user.id)
+        else:
+            print("Form errors:", form.errors)
     context = {'form': form}
-    return render(request,'base/update-user.html',context)
+    return render(request, 'base/update-user.html', context)
 
 
 def topicsPage(request):
@@ -218,3 +254,17 @@ def topicsPage(request):
 def activityPage(request):
     room_messages = Message.objects.all().order_by('-created')[:5] 
     return render(request,'base/activity.html',{'room_messages':room_messages})
+
+def room_participants(request, room_id):
+    room = Room.objects.get(id=room_id)
+    users = room.participants.all()
+    data = [
+        {
+            "id": user.id,
+            "name": user.name,
+            "username": user.username,
+            "avatar_url": user.avatar if user.avatar else "https://avatar.iran.liara.run/public/17"
+        }
+        for user in users
+    ]
+    return JsonResponse(data, safe=False)
