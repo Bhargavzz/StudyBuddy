@@ -14,7 +14,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 DEBUG = False  # Set to False in production
 
 ALLOWED_HOSTS = [
-    'your-vercel-app.vercel.app',
+    'studybuddy-stdl.onrender.com',
     'localhost',
     '127.0.0.1'
 ]
