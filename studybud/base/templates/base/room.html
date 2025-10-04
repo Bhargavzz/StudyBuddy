@@ -63,7 +63,7 @@
           </div>
 
           <div class="room__conversation">
-            <div class="threads scroll">
+            <div class="threads scroll" id="threadsContainer">
               {% for message in room_messages %}
               <div class="thread">
                 <div class="thread__top">
@@ -74,7 +74,7 @@
                       </div>
                       <span>@{{ message.user.username }}</span>
                     </a>
-                    <span class="thread__date">{{ message.created|timesince }} ago</span>
+                    <span class="thread__date" data-timestamp="{{ message.created.isoformat }}">{{ message.created|timesince }} ago</span>
                   </div>
                   {% if request.user == message.user %}
                   <a href="{% url 'delete-message' message.id %}">
@@ -139,7 +139,19 @@
 <!-- Supabase Realtime JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+  // Expose room data to offline.js
+  window.__ROOM_ID__ = {{ room.id }};
+  window.__CURRENT_USER_ID__ = {{ request.user.id|default:'null' }};
+  window.__CURRENT_USERNAME__ = "{{ request.user.username }}";
+  window.__CURRENT_AVATAR__ = "{{ request.user.avatar|default:'https://avatar.iran.liara.run/public/17' }}";
+
   document.addEventListener('DOMContentLoaded', () => {
+    // Auto-scroll to bottom when page loads
+    const threadsContainer = document.getElementById('threadsContainer');
+    if (threadsContainer) {
+      threadsContainer.scrollTop = threadsContainer.scrollHeight;
+    }
+
     const supabase = window.supabase.createClient(
       "{{ SUPABASE_URL }}",
       "{{ SUPABASE_ANON_KEY }}"
@@ -148,62 +160,8 @@
     const roomId = {{ room.id }};
     const currentUserId = {{ request.user.id|default:'null' }};
     const currentUsername = "{{ request.user.username }}";
-    const threads = document.querySelector('.threads');
-    const form = document.querySelector('.room__message form');
-    const input = form.querySelector('input[name=body]');
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-    function addMessageToDOM(message) {
-      const thread = document.createElement('div');
-      thread.className = 'thread';
-      thread.innerHTML = `
-        <div class="thread__top">
-          <div class="thread__author">
-            <a href="/profile/${message.user_id}" class="thread__authorInfo">
-              <div class="avatar avatar--small">
-                <img src="${message.avatar_url || '/static/images/default-avatar.png'}" />
-              </div>
-              <span>@${message.username || 'User'}</span>
-            </a>
-            <span class="thread__date">just now</span>
-          </div>
-        </div>
-        <div class="thread__details">${message.body}</div>
-      `;
-      threads.prepend(thread);
-    }
-
-    // 🟡 1. Handle form submission manually
-    form.addEventListener('submit', async function (e) {
-      e.preventDefault();
-
-      const body = input.value.trim();
-      if (!body) return;
-
-      // Optimistically render
-      addMessageToDOM({
-        user_id: currentUserId,
-        username: currentUsername,
-        avatar_url: "{{ request.user.avatar|default:'https://avatar.iran.liara.run/public/17' }}",
-        body: body
-      });
-
-      input.value = "";
-
-      // Send message to Django (same URL)
-      const response = await fetch("", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "X-CSRFToken": csrfToken,
-        },
-        body: new URLSearchParams({ body })
-      });
-
-      if (!response.ok) {
-        alert("Message failed to send.");
-      }
-    });
+    // 🟢 1. Remove the old form submission handler - offline.js will handle this now
 
     // 🟢 2. Supabase Realtime: only render if it's NOT your message
     supabase
@@ -218,8 +176,9 @@
         },
         payload => {
           const msg = payload.new;
-          if (msg.user_id !== currentUserId) {
-            addMessageToDOM(msg);
+          // Let offline.js handle this via global function
+          if (typeof window.__sb_addMessageFromRealtime === 'function') {
+            window.__sb_addMessageFromRealtime(msg);
           }
         }
       )
@@ -271,10 +230,11 @@
   });
 </script>
 
-
-<!-- Your original script -->
+<!-- Immediate delete is not functionalble if synced via offline -> online -->
+ <!-- Work on Dynamic Timestamps in offline.js -->
+<!-- Load offline functionality -->
 {% load static %}
-<script src="{% static 'js/script.js' %}"></script>
+<script src="{% static 'js/offline.js' %}"></script>
 
 
 {% endblock %}

@@ -18,4 +18,5 @@ urlpatterns = [
     path('topics/',views.topicsPage,name="topics"),
     path('activity/',views.activityPage,name="activity"),
     path('api/room/<int:room_id>/participants/', views.room_participants, name='room-participants'),
+    path('api/sync_offline/', views.sync_offline_messages, name='sync-offline-messages'),
 ]

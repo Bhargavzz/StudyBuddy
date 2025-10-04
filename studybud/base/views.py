@@ -105,7 +105,7 @@ def room(request,pk):
     #     if i['id'] == int(pk):
     #         room = i
     room = Room.objects.get(id=pk)
-    room_messages=room.message_set.all().order_by('-created')
+    room_messages=room.message_set.all().order_by('created')  # Changed to ascending order (oldest first)
     participants = room.participants.all()
     if request.method=='POST':
         body = request.POST.get('body')
@@ -118,6 +118,13 @@ def room(request,pk):
                 avatar_url=request.user.avatar if request.user.avatar else 'https://avatar.iran.liara.run/public/17'
             )
         room.participants.add(request.user)
+        
+        # If it's an AJAX request (from our JavaScript), return JSON
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            from django.http import JsonResponse
+            return JsonResponse({'status': 'success'})
+        
+        # Otherwise, redirect (for users without JavaScript)
         return redirect('room',pk=room.id)
     
     
@@ -263,3 +270,73 @@ def room_participants(request, room_id):
         for user in users
     ]
     return JsonResponse(data, safe=False)
+
+@login_required
+def sync_offline_messages(request):
+    """
+    API endpoint to sync offline messages when network returns.
+    Expects JSON: {"room_id": 123, "messages": [{"client_id": "uuid", "body": "text", "timestamp": "iso"}]}
+    """
+    if request.method != 'POST':
+        return JsonResponse({"error": "POST only"}, status=405)
+    
+    try:
+        import json
+        data = json.loads(request.body)
+        room_id = data.get('room_id')
+        messages = data.get('messages', [])
+        
+        if not room_id:
+            return JsonResponse({"error": "room_id required"}, status=400)
+            
+        room = Room.objects.get(id=room_id)
+        synced_messages = []
+        
+        for msg_data in messages:
+            client_id = msg_data.get('client_id')
+            body = msg_data.get('body', '').strip()
+            
+            if not body or not client_id:
+                continue
+                
+            # Check if message already exists (deduplication)
+            existing = Message.objects.filter(
+                user=request.user,
+                room=room,
+                body=body
+            ).first()
+            
+            if not existing:
+                # Save new message
+                message = Message.objects.create(
+                    user=request.user,
+                    room=room,
+                    body=body,
+                    username=request.user.username,
+                    avatar_url=request.user.avatar if request.user.avatar else 'https://avatar.iran.liara.run/public/17'
+                )
+                room.participants.add(request.user)
+                
+                synced_messages.append({
+                    "client_id": client_id,
+                    "server_id": message.id,
+                    "synced": True
+                })
+            else:
+                # Already exists, mark as synced
+                synced_messages.append({
+                    "client_id": client_id,
+                    "server_id": existing.id,
+                    "synced": True,
+                    "duplicate": True
+                })
+        
+        return JsonResponse({
+            "success": True,
+            "synced_messages": synced_messages
+        })
+        
+    except Room.DoesNotExist:
+        return JsonResponse({"error": "Room not found"}, status=404)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
