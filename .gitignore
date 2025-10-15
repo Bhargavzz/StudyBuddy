@@ -7,9 +7,15 @@ __pycache__/
 # Django database
 db.sqlite3
 
-# Django collectstatic
+# Django collectstatic (but keep development static files)
 staticfiles/
-static/
+static/admin/
+static/rest_framework/
+
+# Allow custom static files to be tracked
+!static/js/
+!static/css/
+!static/images/
 
 # Media files (if used)
 media/
